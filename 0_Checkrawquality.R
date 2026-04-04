@@ -94,7 +94,7 @@ Quality_check_debug <- function(samples, fold2, outdir = NULL, pdf_file = NULL) 
   # combine summary
   summary_df <- do.call(rbind, lapply(res_list, function(x) x$summary))
   summary_df$chemistry<-metainfo[match(summary_df$sample,metainfo$dataset),'chemistry']
-  
+  summary_df<- as.data.frame(lapply(summary_df, as.character), stringsAsFactors = FALSE)
   if (!is.null(outdir)) {
     write.xlsx(summary_df, file = file.path(outdir, "scRNA_rawQCdata_debug.xlsx"))
   }
