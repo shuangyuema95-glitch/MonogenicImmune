@@ -62,7 +62,7 @@ Quality_check_debug <- function(samples, fold2, outdir = NULL, pdf_file = NULL) 
     # Vioplots
     p <- VlnPlot(s,
                  features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo","percent.platelet", "percent.rbc"),
-                 ncol = 4,
+                 ncol = 6,
                  pt.size = 0) & theme(axis.title.x = element_blank(),
                                       axis.text.x = element_blank(),
                                       axis.ticks.x = element_blank())
@@ -130,7 +130,7 @@ Quality_check_debug <- function(samples, fold2, outdir = NULL, pdf_file = NULL) 
   plot_list<-lapply(res_list,function(x){
     ggdraw()+draw_plot(x$plot)})
   
-  pdf(file.path(outdir, pdf_file), width = 18, height = 20)
+  pdf(file.path(outdir, pdf_file), width = 29, height = 20)
   n_per_page <- 8  # ncol 2 nrow 4
   for (i in seq(1, length(plot_list), by = n_per_page)) {
     
