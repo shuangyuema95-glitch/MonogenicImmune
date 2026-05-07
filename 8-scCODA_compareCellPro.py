@@ -120,6 +120,7 @@ def run_scCODA_batch_and_export(
         print(f"\n=== Running: {group} vs {control_group} | Sampler: {sampler} ===")
         sub_data = data_all[data_all.obs["Condition"].isin([control_group, group])]
 
+        #formula = "C(Condition, Treatment('Control')) + Sex + Age",
         model = mod.CompositionalAnalysis(
             sub_data,
             formula="Condition",
@@ -144,22 +145,50 @@ def run_scCODA_batch_and_export(
     print(f"\nDone! Output file: {output_csv}")
     return final_df
 
-# Run HMC (fast for plotting)
-result_table_hmc = run_scCODA_batch_and_export(
-    csv_path="haber_counts.csv",
-    control_group="Control",
-    reference_cell_type="Goblet",
-    fdr=0.4,
-    sampler="hmc",
-    output_csv="scCODA_HMC_for_R.csv"
-)
+# Run HMC (fast running----)
+result_table_hmc = run_scCODA_batch_and_export(csv_path="haber_counts.csv",control_group="Control",
+reference_cell_type="Goblet",fdr=0.4,sampler="hmc",output_csv="scCODA_HMC_for_R.csv")
 
-# Run NUTS (for publication)
-result_table_nuts = run_scCODA_batch_and_export(
-    csv_path="haber_counts.csv",
-    control_group="Control",
-    reference_cell_type="Goblet",
-    fdr=0.4,
-    sampler="nuts",
-    output_csv="scCODA_NUTS_for_R.csv"
-)
+# Run NUTS
+result_table_nuts = run_scCODA_batch_and_export(csv_path="haber_counts.csv",control_group="Control",
+reference_cell_type="Goblet",fdr=0.4,sampler="nuts",output_csv="scCODA_NUTS_for_R.csv")
+
+# repeat run scCODA analysis by selecting each cell type as reference
+def run_all_references_count_significant(
+        csv_path="haber_counts.csv",
+        control_group="Control",
+        fdr=0.4,
+        sampler="nuts"
+):
+    cell_counts = pd.read_csv(csv_path)
+    cell_types = [col for col in cell_counts.columns if col != "Mouse"]
+    all_results = []
+    for ref_cell in cell_types:
+        print(f"\n===== Running scCODA with reference: {ref_cell} =====")
+
+        df = run_scCODA_batch_and_export(
+            csv_path=csv_path,
+            control_group=control_group,
+            reference_cell_type=ref_cell,
+            fdr=fdr,
+            sampler=sampler,
+            output_csv=f"temp_ref_{ref_cell}.csv"
+        )
+
+        df["Reference"] = ref_cell
+        all_results.append(df)
+
+    all_df = pd.concat(all_results, ignore_index=True)
+
+    count_df = all_df.groupby(["Group", "Cell Type"])["Significant"].sum().reset_index()
+    heatmap_matrix = count_df.pivot(
+        index="Cell Type",
+        columns="Group",
+        values="Significant"
+    ).fillna(0).astype(int)
+    heatmap_matrix.to_csv("scCODA_heatmap_count_matrix.csv")
+    print("\n scCODA has been done for all reference cell types：scCODA_heatmap_count_matrix.csv")
+    return heatmap_matrix, all_df
+
+
+heatmap_count, all_results = run_all_references_count_significant(csv_path="haber_counts.csv",control_group="Control",fdr=0.4,sampler="hmc")
