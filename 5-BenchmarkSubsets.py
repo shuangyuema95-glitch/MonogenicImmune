@@ -1,30 +1,33 @@
 import os
 import scanpy as sc
-import scvi
+import numpy as np
+import pandas as pd
+import time
 import scib_metrics
 from scib_metrics.benchmark import Benchmarker
-import anndata
-import pandas as pd
-import bbknn
-import harmonypy
-import scanorama
-import torch
-from scalex import SCALEX
-import numpy as np
-import psutil
+from scib_metrics.benchmark import Benchmarker, BatchCorrection
+import pyreadr
+
+
 
 np.Inf = np.inf
-process = psutil.Process()
-torch.cuda.empty_cache()
-print("The number of GPU: ", torch.cuda.device_count())
-
 input_path = "E:/AID cohort/code/result/"
 os.chdir(input_path)
 
+
 pcaNumber=50
 adata_merged = sc.read_h5ad(f"{pcaNumber}_final_merged_object.h5ad")
+seurat_meta = pyreadr.read_r("meta.rds")[None]
+seurat_meta = seurat_meta.reset_index(drop=True)
 
-def format_benchmark_results(df_harmony, df_bbknn, df_scanorama, df_scVI, df_scalex):
+adata_barcodes = pd.DataFrame(adata_merged.obs.index, columns=["barcode"])
+final = pd.merge(adata_barcodes,seurat_meta,on="barcode",how="left")
+adata_merged.obsm["X_umap_seurat"] = seurat_meta[["UMAP1", "UMAP2"]].values
+adata_merged.obs["leiden_seurat"] = seurat_meta["seurat_clusters"].astype(str).values
+
+
+
+def format_benchmark_results(df_harmony, df_bbknn, df_Seurat, df_scanorama, df_scVI, df_scalex):
     """
     Standardize and clean benchmark results into a unified format.
     Parameters
@@ -38,9 +41,11 @@ def format_benchmark_results(df_harmony, df_bbknn, df_scanorama, df_scVI, df_sca
     # Clean each result
     df_harmony_clean = df_harmony.iloc[[0]].copy()
     df_bbknn_clean = df_bbknn.iloc[[0]].copy()
+    df_Seurat_clean = df_Seurat.iloc[[0]].copy()
     df_scanorama_clean = df_scanorama.iloc[[0]].copy()
     df_scvi_clean = df_scVI.iloc[[0]].copy()
     df_scalex_clean = df_scalex.iloc[[0]].copy()
+
 
     # Assign method names
     df_harmony_clean["Embedding"] = "Harmony"
@@ -48,10 +53,11 @@ def format_benchmark_results(df_harmony, df_bbknn, df_scanorama, df_scVI, df_sca
     df_scanorama_clean["Embedding"] = "Scanorama"
     df_scvi_clean["Embedding"] = "scVI"
     df_scalex_clean["Embedding"] = "scalex"
+    df_Seurat_clean['Embedding'] = 'Seurat'
 
     # Concatenate
     all_clean = pd.concat(
-        [df_harmony_clean, df_bbknn_clean, df_scanorama_clean, df_scvi_clean, df_scalex_clean],
+        [df_harmony_clean, df_bbknn_clean,df_Seurat_clean, df_scanorama_clean, df_scvi_clean, df_scalex_clean],
         axis=0, ignore_index=True)
 
     # Reorder columns
@@ -79,22 +85,35 @@ def run_subset_benchmark(adata_merged, batch_key, pcaNumber, subsetcell=2000, n_
     all_cells = adata_merged.obs_names.values
     fixed_cells = [np.random.choice(all_cells, subsetcell, replace=False) for _ in range(n_repeats)]
 
-    def bench(adata, bk, lk, ek):
+    '''def bench(adata, bk, lk, ek):
         dfs = []
         for ids in fixed_cells:
             sub = adata[adata.obs_names.isin(ids)]
             bm = Benchmarker(sub, bk, lk, [ek], n_jobs=n_jobs)
             bm.benchmark()
             dfs.append(bm.get_results().iloc[[0]])
-        return pd.concat(dfs).mean(0).to_frame().T
+        return pd.concat(dfs).mean(0).to_frame().T'''
+
+    # KBET metrics was removed becaused the memeory limit, need > 2TB
+    def bench(adata, bk, lk, ek):
+        dfs = []
+        for ids in fixed_cells:
+            sub = adata[adata.obs_names.isin(ids)]
+            bm = Benchmarker(sub, bk, lk, [ek], n_jobs=n_jobs,
+                batch_correction_metrics=BatchCorrection(kbet_per_label=False,ilisi_knn=True,
+                graph_connectivity=True,pcr_comparison=True,bras=True))
+            bm.benchmark()
+            dfs.append(bm.get_results().iloc[[0]])
+        return pd.concat(dfs).mean().to_frame().T
 
     df_harmony = bench(adata_merged, batch_key, "leiden_harmony", "X_pca_harmony")
     df_bbknn = bench(adata_merged, batch_key, "leiden_bbknn", "X_umap_BBKNN")
+    df_Seurat =  bench(adata_merged, batch_key, "leiden_seurat", "X_umap_seurat")
     df_scanorama = bench(adata_merged, batch_key, "leiden_scanorama", "X_scanorama")
     df_scVI = bench(adata_merged, batch_key, "leiden_scVI", "X_scVI")
     df_scalex = bench(adata_merged, batch_key, "scalex_leiden", "X_scalex")
 
-    all_clean = format_benchmark_results(df_harmony, df_bbknn, df_scanorama, df_scVI, df_scalex)
+    all_clean = format_benchmark_results(df_harmony, df_bbknn,df_Seurat, df_scanorama, df_scVI, df_scalex)
     all_clean.to_csv(f"{pcaNumber}_Subset{subsetcell}_Benchmark_Final.csv", index=False)
 
     pipeline_end_time = time.time()
