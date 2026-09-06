@@ -777,8 +777,8 @@ network_score_p <- function(module_edges, cor_matrix, fdr_matrix, spec_matrix,
       scale_fill_identity() + scale_color_identity() + scale_shape_identity() +
       geom_node_text(aes(label = label), size = nodetext_size, color = node_text_color) +
       theme_void() +
-      ggtitle(sprintf("Module %s (conn=%.3f, p.adj=%.4f %s)",
-                      sub("M","",m), n_nodes0, n_edges0, conn_score0, p_perm, sig_label)) +
+      ggtitle(sprintf("Module %s (conn=%.3f, p.perm=%.4f %s)",
+                      sub("M","",m), conn_score0, p_perm, sig_label))+
       theme(legend.position = "right", plot.title = element_text(hjust = 0.5, size = 10))
     
     edge_info <- data.frame(factor1 = edge_ends[,1], factor2 = edge_ends[,2],
@@ -803,10 +803,6 @@ network_score_p <- function(module_edges, cor_matrix, fdr_matrix, spec_matrix,
   return(network_list)
 }
 # factor text within point,deep color, white text, light color, black text
-
-
-
-
 network_act_pw <- network_score_p(
   module_edges = module_edges_act_pw,
   cor_matrix = cor_matrix, fdr_matrix = fdr_matrix, spec_matrix = spec_matrix,
@@ -831,9 +827,8 @@ network_merged <- network_score_p(
 #---- BH correction for each version ----
 p_act_pw  <- p.adjust(sapply(network_act_pw, function(x) x$permutation_p), method = "BH")
 p_inh_pw  <- p.adjust(sapply(network_inh_pw, function(x) x$permutation_p), method = "BH")
-p_merged  <- p.adjust(sapply(network_merged, function(x) x$permutation_p), method = "BH")
+#p_merged  <- p.adjust(sapply(network_merged, function(x) x$permutation_p), method = "BH")
 Presult=data.frame(module = names(p_act_pw), p_act = p_act_pw, p_inh = p_inh_pw, p_merged = p_merged)
-Presult
 write.xlsx(Presult,file="E:/AID cohort/code/NMF/0903_NMFnetwork_permutaionPvalue.xlsx")
 
 
@@ -845,7 +840,177 @@ inh_net<-plot_grid(plotlist = lapply(network_inh_pw, function(x) x$igraph), ncol
 #25.59 17.71
 ggsave(act_net,file="E:\\AID cohort\\code\\NMF\\activation_module.pdf",width = 18.74,height = 5.02)
 ggsave(inh_net,file="E:\\AID cohort\\code\\NMF\\inhibition_module.pdf",width = 10.47,height = 5.49)
-
-
-
 save.image(file="E:\\AID cohort\\code\\NMF\\0902_NMF.Rdata")
+
+
+
+###plot connection score and adjusted p (heatmap)
+data1<-Presult[,c(1,2,3)]
+data2<-data.frame(
+c_act=as.numeric(unlist(lapply(network_act_pw,function(x){x$connection_score}))),
+c_int=as.numeric(unlist(lapply(network_inh_pw,function(x){x$connection_score}))))
+data<-cbind(data1,data2)
+data
+
+##(1)pheatmap
+library(pheatmap); library(patchwork)
+rownames(data) <- data$module
+p_mat <- as.matrix(data[,c("p_act","p_inh")]); colnames(p_mat) <- c("Active","Inhibitory")
+p_mat[p_mat==0] <- 1e-4
+sig <- matrix(ifelse(p_mat<0.001,"***",ifelse(p_mat<0.01,"**",ifelse(p_mat<0.05,"*",""))),nrow(p_mat))
+pcol <- colorRampPalette(c("#FFF5F0","#FDD0A2","#FC8D59","#D7301F","#7F0000"))(100)
+ph <- pheatmap(-log10(p_mat),color=pcol,cluster_rows=F,cluster_cols=F,display_numbers=sig,
+               number_color="black",fontsize_number=11,border_color="white",cellwidth=45,cellheight=22,
+               main="-log10(adj. P-value)",angle_col=0,fontsize=10,legend_breaks=c(1,2,3,4),
+               legend_labels=c("1","2","3",">=4"),silent=T)
+
+c_mat <- as.matrix(data[,c("c_act","c_int")]); colnames(c_mat) <- c("Active","Inhibitory")
+ccol <- colorRampPalette(c("#F7FBFF","#DEEBF7","#9ECAE1","#4292C6","#08306B"))(100)
+ch <- pheatmap(c_mat,color=ccol,cluster_rows=F,cluster_cols=F,display_numbers=T,number_format="%.2f",
+               number_color="black",fontsize_number=9,border_color="white",cellwidth=45,cellheight=22,
+               main="Connection score",angle_col=0,fontsize=10,silent=T)
+
+wrap_plots(ph[[4]],ch[[4]],ncol=2)
+
+##(2) disease- module heatmap
+library(tidyverse); library(ggplot2); library(patchwork)
+disease_colors <- c(
+  "KD" = "#2C73B9", "JIA" = "#7C7EB8", "SLE" = "#9284B7",
+  "Uncategorized" = "#A9799D", "Protein homeostasis" = "#D69A9D",
+  "TBK1_IRF3" = "#8F7966", "Cytoskeleton and small GTPase" = "#A6A6A6",
+  "Negative regulation of IFN-I" = "#6FA7A0",
+  "Inborn errors of cell death" = "#E9822A",
+  "Immune metabolic" = "#E9C348", "Inflammasome IL-1β" = "#8A9BC8",
+  "Arachidonic acid metabolism" = "#5AAFC7",
+  "Endolysosomal nucleic acid sensing" = "#C05C86",
+  "Ca2+ flux-PLC" = "#9DC6E1", "Osteoclast function" = "#F0B6C7",
+  "NF-κB pathway" = "#E6AE70"
+)
+
+map_disease_name <- function(d) {
+  d <- gsub("_", " ", d)
+  d <- gsub("NFKB pathway", "NF-κB pathway", d)
+  d <- gsub("TBK1 IRF3", "TBK1_IRF3", d)
+  return(d)
+}
+
+col_lum <- function(hex) {
+  rgb <- col2rgb(hex) / 255
+  0.299 * rgb[1] + 0.587 * rgb[2] + 0.114 * rgb[3.5]
+}
+
+am_tab <- bidding_act$result %>%
+  select(disease, module, activity) %>%
+  mutate(mod_num = as.numeric(sub("M", "", module)),
+         disease_color = disease_colors[map_disease_name(disease)],
+         disease_color = ifelse(is.na(disease_color), "#FFFFFF", disease_color)) %>%
+  arrange(mod_num, disease) %>%
+  mutate(disease = factor(disease, levels = rev(disease)))
+
+im_tab <- bidding_inh$result %>%
+  select(disease, module, activity) %>%
+  mutate(mod_num = as.numeric(sub("M", "", module)),
+         disease_color = disease_colors[map_disease_name(disease)],
+         disease_color = ifelse(is.na(disease_color), "#FFFFFF", disease_color)) %>%
+  arrange(mod_num, disease) %>%
+  mutate(disease = factor(disease, levels = rev(disease)))
+
+plot_table <- function(df, title_text, header_fill = "#333333",
+                       col1_w = 1, col2_w = 3, gap = 0.15) {
+  n_rows <- nrow(df)
+  y_vals <- as.numeric(df$disease)
+  
+  # column centers
+  x1 <- col1_w / 2
+  x2 <- col1_w + gap + col2_w / 2
+  x_max <- col1_w + gap + col2_w
+  
+  col1_df <- data.frame(
+    x = x1, y = y_vals, label = df$module,
+    fill = "#FFFFFF", text_color = "black",
+    tile_w = col1_w * 0.98, stringsAsFactors = FALSE
+  )
+  col2_df <- data.frame(
+    x = x2, y = y_vals, label = as.character(df$disease),
+    fill = df$disease_color,
+    text_color = ifelse(sapply(df$disease_color, col_lum) > 0.5, "black", "white"),
+    tile_w = col2_w * 0.98, stringsAsFactors = FALSE
+  )
+  plot_df <- rbind(col1_df, col2_df)
+  
+  ggplot(plot_df, aes(x = x, y = y)) +
+    geom_tile(aes(fill = fill, width = tile_w, height = 0.98),
+              color = "black", linewidth = 0.4) +
+    scale_fill_identity() +
+    geom_text(aes(label = label, color = text_color),
+              size = 3, hjust = 0.5, vjust = 0.5) +
+    scale_color_identity() +
+    # header
+    annotate("rect", xmin = 0.01, xmax = col1_w * 0.99,
+             ymin = n_rows + 0.5, ymax = n_rows + 1.5,
+             fill = header_fill, color = "black", linewidth = 0.4) +
+    annotate("rect", xmin = col1_w + gap + 0.01, xmax = x_max - 0.01,
+             ymin = n_rows + 0.5, ymax = n_rows + 1.5,
+             fill = header_fill, color = "black", linewidth = 0.4) +
+    annotate("text", x = x1, y = n_rows + 1, label = title_text,
+             color = "white", size = 3.5, fontface = "bold") +
+    annotate("text", x = x2, y = n_rows + 1, label = "Disease",
+             color = "white", size = 3.5, fontface = "bold") +
+    scale_x_continuous(limits = c(0, x_max), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0.5, n_rows + 1.5), expand = c(0, 0)) +
+    theme_void() +
+    theme(plot.margin = margin(10, 10, 10, 10))
+}
+
+p_am <- plot_table(am_tab, "AM")
+p_im <- plot_table(im_tab, "IM")
+
+p_am + p_im + plot_layout(ncol = 2, widths = c(1, 1))
+
+
+####writing result
+##(1) Factor ~ cell type
+labe218<-read.csv("E:\\AID cohort\\code\\NMF\\Spectra\\lam0001_dict242_218factors_labeled.csv")
+library(tidyr)
+labe218 <-labe218%>%
+  extract(X, into = c("Factor", "Pathway"),
+          regex = "^(Factor_\\d+)[_\\s]+(.+)$",
+          remove = FALSE)
+labe218<-labe218[,c("Factor","Pathway")]
+library(openxlsx)
+write.xlsx(labe218,file="E:\\AID cohort\\SupplememtTablexlsx\\Table 5_Annotated 218 factors.xlsx")
+##(2) NMF result
+# iterate over each module, collect unique factors from factor1+factor2, split into Factor and label
+library(tidyr)
+library(dplyr)
+
+Act_result <- do.call(rbind, lapply(names(network_act_pw), function(mod) {
+  edges   <- network_act_pw[[mod]]$edges_in_graph
+  factors <- unique(c(as.character(edges$factor1), as.character(edges$factor2)))
+  tibble(X = factors, Module = mod) %>%
+    extract(X, into = c("Factor", "label"), regex = "^(Factor_\\d+)[_[:space:]]+(.+)$")
+}))
+
+Inh_result <- do.call(rbind, lapply(names(network_inh_pw), function(mod) {
+  edges   <- network_inh_pw[[mod]]$edges_in_graph
+  factors <- unique(c(as.character(edges$factor1), as.character(edges$factor2)))
+  # strip leading Inhibit_ first
+  factors_clean <- sub("^Inhibit_", "", factors)
+  tibble(X = factors_clean, Module = mod) %>%
+    extract(X, into = c("Factor", "label"), regex = "^(Factor_\\d+)[_[:space:]]+(.+)$")
+}))
+
+# join with bidding result using original M1‑M12, then add prefix A / I
+Act_result <- Act_result %>%
+  left_join(bidding_act$result, by = c("Module" = "module")) %>%
+  mutate(Module = paste0("A", Module))
+Inh_result <- Inh_result %>%
+  left_join(bidding_inh$result, by = c("Module" = "module")) %>%
+  mutate(Module = paste0("I", Module))
+
+# check split failures
+Act_bad <- Act_result %>% filter(is.na(Factor) | is.na(label))
+Inh_bad <- Inh_result %>% filter(is.na(Factor) | is.na(label))
+
+All_module_result <- bind_rows(Act_result, Inh_result)
+write.xlsx(All_module_result,file="E:\\AID cohort\\SupplememtTablexlsx\\Table 8_NMF module activity.xlsx")
