@@ -11,21 +11,20 @@ setwd("E:\\AID cohort\\code\\result")
 pbmc1<-readRDS("PBMC1.rds")
 
 gene_list <- list(
-  "NFKB pathway" = c("TNFAIP3", "IRAK2", "NOD2", "RELA"),
-  "Uncategorized" = c("ADA2", "ELF4", "CSF3R", "STAT4"),
-  "Osteoclast function" = c("ACP5", "OGFRL1"),
-  "Ca2+_flux-PLC" = c("PLCG2", "PLCG1"),
-  "Endolysosomal_nucleic_acid_sensing" = c("UNC93B1", "TLR8", "TLR7", "TLR1", "PLD4", "TRAF3"),
+  "NFKB pathway" = c("TNFAIP3","IRAK2","NOD2","RELA","TLR1","IL1R1"),
+  "Uncategorized" = c("ADA2","ELF4","CSF3R","STAT4"),
+  "Osteoclast function" = c("ACP5","OGFRL1"),
+  "Ca2+_flux-PLC" = c("PLCG2","PLCG1"),
+  "Endolysosomal_nucleic_acid_sensing" = c("UNC93B1","TLR8","TLR7","PLD4","TRAF3"),
   "Arachidonic acid metabolism" = c("TBXAS1"),
-  "Inflammasome_IL-1β" = c("IL1R1", "NLRC4", "NLRP3", "PSTPIP1", "CDC42", "LPIN2"),
-  "Immune_metabolic" = c("LACC1", "SLC7A7"),
-  "PP" = c("polygenic"),
-  "HC" = c("wide-type"),
-  "Inborn_errors_of_cell_death" = c("RIPK1", "TNFRSF1A", "OTULIN", "RNF31"),
-  "Negative_regulation_of_IFN-I" = c("ISG15", "USP18", "SOCS1"),
-  "Cytoskeleton_and_small_GTPase" = c("GNAI2", "KRAS"),
-  "TBK1_IRF3" = c("STING", "TREX1", "IFIH1", "COPA"),
-  "Protein_homeostasis" = c("UBA1", "PSMD12"))
+  "Inflammasome_IL-1β" = c("NLRC4","NLRP3","PSTPIP1","CDC42","LPIN2"),
+  "Immune_metabolic" = c("LACC1","SLC7A7"),
+  "Inborn_errors_of_cell_death" = c("RIPK1","TNFRSF1A","OTULIN","RNF31"),
+  "Negative_regulation_of_IFN-I" = c("ISG15","USP18","SOCS1"),
+  "Cytoskeleton_and_small_GTPase" = c("GNAI2","KRAS"),
+  "TBK1_IRF3" = c("STING","TREX1","IFIH1","COPA"),
+  "Protein_homeostasis" = c("UBA1","PSMD12"))
+
 
 fixed_level1_order <- c("DC","Monocyte","pDC","LDG","Basophil","B cell","Plasma","Naive CD4 T","Non-naive CD4 T","Naive CD8 T","Non-naive CD8 T","UTC","NK","Erythrocyte","Platelet")
 
@@ -142,7 +141,7 @@ dim(gene_count);colnames(gene_count)
 individual_count<-make_scCODA_individual_matrix(pbmc1,gene_list ,fixed_level1_order)
 dim(individual_count);colnames(individual_count)
 
-write.csv(condition_count,file="condition_count.csv",row.names = F)
+write.csv(condition_count,file="E:\\AID cohort\\code\\CellAnnotation\\condition_count.csv",row.names = F)
 write.csv(gene_count,file="gene_count.csv",row.names = F)
 write.csv(individual_count,file="individual_count.csv",row.names = F)
 
@@ -240,7 +239,7 @@ plot_scCODA_bubble <- function(input_dir, csv_file) {
 }
 plot_scCODA_bubble(
   input_dir = "./",
-  csv_file = "scCODA_condition_out.csv")
+  csv_file = "0829scCODA_condition_out.csv")
 
 ###(2) discreat
 #' Generate scCODA Bubble Plot V2
@@ -258,6 +257,7 @@ plot_scCODA_bubble(
 #' @param tier_color_vec Character vector length=6, custom six-tier log2FC color palette, NULL = built-in cold-warm palette
 #' @returnType ggplot
 #' @author MSY
+
 plot_scCODA_bubble2 <- function(input_dir,
                                 csv_file,
                                 fc_cutoff = 0.5,
@@ -295,27 +295,7 @@ plot_scCODA_bubble2 <- function(input_dir,
     "1 ~ 2" = "#E53935",
     "> 2" = "#B71C1C"
   )
-  # 
-  # default_tier_palette <- c(
-  #   "< -2" = "#003D81",
-  #   "-2 ~ -1" = "#0B71AB",
-  #   "-1 ~ 0" = "#9CD2ED",
-  #   "0 ~ 1" = "#F7BE6F",
-  #   "1 ~ 2" = "#E55C3A",
-  #   "> 2" = "#8C2522"
-  # )
-  # default_tier_palette <- c(
-  #   "< -2" = "#003D81",
-  #   "-2 ~ -1" = "#5C6BC0",
-  #   "-1 ~ 0" = "#BBDEFB",
-  #   "0 ~ 1" = "#FFCCBC",
-  #   "1 ~ 2" = "#E53935",
-  #   "> 2" ="#8C2522"
-  # )
   
-  
-  
-  #003D81 "#0B71AB" "#9CD2ED" "#F7BE6F" "#E55C3A" #8C2522"
   df_raw <- read_csv(paste0(input_dir, csv_file), show_col_types = FALSE)
   df_filter <- df_raw %>% filter(Significant == TRUE, abs(log2FC) >= fc_cutoff)
   
@@ -323,7 +303,7 @@ plot_scCODA_bubble2 <- function(input_dir,
   if (nrow(df_filter) == 0) {
     message(paste0("Warning: No cells pass filter (Significant=T & abs(log2FC) >= ", fc_cutoff, ")"))
     return(ggplot() +
-             annotate("text", x = 1, y = 0.5, label = paste0("No cells meet abs(log2FC) ≥ ", fc_cutoff)) +
+             annotate("text", x = 0.5, y = 0.5, label = paste0("No cells meet abs(log2FC) ≥ ", fc_cutoff)) +
              labs(x = "", y = "") +
              theme_bw() +
              theme(
@@ -340,22 +320,38 @@ plot_scCODA_bubble2 <- function(input_dir,
       Level1 = case_when(
         str_detect(CellShort, "^DC") ~ "DC",
         str_detect(CellShort, "^Mono") ~ "Monocyte",
-        CellShort %in% c("pDC", "LDG", "Basophil") ~ "Granulocyte/pDC",
+        CellShort == "pDC" ~ "pDC",
+        CellShort == "LDG" ~ "LDG",
+        CellShort == "Basophil" ~ "Basophil",
         str_detect(CellShort, "^B") ~ "B cell",
-        str_detect(CellShort, "^Naive CD4|^NnCD4T") ~ "CD4 T cell",
-        str_detect(CellShort, "^Naive CD8|^NnCD8T") ~ "CD8 T cell",
+        str_detect(CellShort, "^Plasma") ~ "Plasma",
+        str_detect(CellShort, "^Naive CD4") ~ "Naive CD4 T",
+        str_detect(CellShort, "^NnCD4T") ~ "Non-naive CD4 T",
+        str_detect(CellShort, "^Naive CD8") ~ "Naive CD8 T",
+        str_detect(CellShort, "^NnCD8T") ~ "Non-naive CD8 T",
         str_detect(CellShort, "^UTC") ~ "UTC",
-        str_detect(CellShort, "^NK") ~ "NK cell",
-        TRUE ~ "Other"
+        str_detect(CellShort, "^NK") ~ "NK"
       ),
-      Level1 = factor(Level1, levels = c("DC","Monocyte","Granulocyte/pDC","B cell","CD4 T cell","CD8 T cell","UTC","NK cell","Other")),
-      # Inclusion probability three size tiers
+      Level1 = factor(Level1, levels = c(
+        "DC",
+        "Monocyte",
+        "pDC",
+        "LDG",
+        "Basophil",
+        "B cell",
+        "Plasma",
+        "Naive CD4 T",
+        "Non-naive CD4 T",
+        "Naive CD8 T",
+        "Non-naive CD8 T",
+        "UTC",
+        "NK"
+      )),
       IncTier = case_when(
         `Inclusion probability` < 0.5 ~ "Low (<0.5)",
         `Inclusion probability` >= 0.5 & `Inclusion probability` < 0.8 ~ "Medium (0.5~0.8)",
         `Inclusion probability` >= 0.8 ~ "High (≥0.8)"
       ),
-      # Six log2FC magnitude tiers for discrete color
       FcTier = case_when(
         log2FC < -2 ~ "< -2",
         log2FC >= -2 & log2FC < -1 ~ "-2 ~ -1",
@@ -366,17 +362,24 @@ plot_scCODA_bubble2 <- function(input_dir,
       ),
       Group = factor(Group, levels = group_levels)
     ) %>%
+    filter(!is.na(Level1)) %>% # 
     arrange(Level1, CellShort) %>%
     mutate(CellShort = factor(CellShort, levels = unique(CellShort)))
   
-  ggplot(df_clean, aes(x = CellShort, y = Group)) +
-    # Vertical dashed reference lines only at -1 / 1
-    geom_vline(xintercept = c(-1,1), linetype = "dashed", color = "gray60", linewidth = 0.3) +
-    # Inclusion threshold horizontal dashed line #898989
-    geom_hline(yintercept = 0.8, linetype = "dashed", color = "#898989", linewidth = 0.4) +
-    geom_point(aes(color = FcTier, size = IncTier), alpha = 0.85, stroke = 0) +
-    scale_color_manual(values = if(!is.null(tier_color_vec)) setNames(tier_color_vec, names(default_tier_palette)) else default_tier_palette, name = "log2FC Tier") +
-    scale_size_manual(values = c("Low (<0.5)" = 2, "Medium (0.5~0.8)" = 4, "High (≥0.8)" = 6), name = "Inclusion Probability") +
+  p <- ggplot(df_clean, aes(x = CellShort, y = Group)) +
+    geom_point(
+      aes(color = FcTier, size = IncTier),
+      alpha = 0.85,
+      stroke = 0
+    ) +
+    scale_color_manual(
+      values = if (!is.null(tier_color_vec)) setNames(tier_color_vec, names(default_tier_palette)) else default_tier_palette,
+      name = "log2FC Tier"
+    ) +
+    scale_size_manual(
+      values = c("Low (<0.5)" = 2, "Medium (0.5~0.8)" = 4, "High (≥0.8)" = 6),
+      name = "Inclusion Probability"
+    ) +
     theme_bw() +
     theme(
       panel.grid = element_line(color = "gray90", linewidth = 0.2),
@@ -387,23 +390,20 @@ plot_scCODA_bubble2 <- function(input_dir,
       axis.text.x = element_text(angle = 45, hjust = 1),
       legend.title = element_text(size = 10),
       legend.text = element_text(color = "black"),
-      plot.margin = margin(5,5,5,5)
+      plot.margin = margin(5, 5, 5, 5)
     ) +
     labs(x = "", y = "")
+  
+  return(p)
 }
 
 
 p_05 <- plot_scCODA_bubble2(
   input_dir = "./",
-  csv_file = "scCODA_condition_out.csv",
+  csv_file = "0829scCODA_condition_out.csv",
   fc_cutoff = 0.5
 )
-p_05
-p_10 <- plot_scCODA_bubble2(
-  input_dir = "./",
-  csv_file = "scCODA_condition_out.csv",
-  fc_cutoff = 1
-)
+
 
 
 #######3 scCODA for scatter 
@@ -550,10 +550,157 @@ combine_scCODA_scatter_grid <- function(plot_list, ncol = 4) {
 
 plot_collection <- plot_scCODA_scatter_allgroups(
   input_dir = "./",
-  csv_file = "scCODA_condition_out.csv",
+  csv_file = "0829scCODA_condition_out.csv",
   inc_cutoff = 0.6)
 all_grid <- combine_scCODA_scatter_grid(plot_collection, ncol = 4)
 all_grid
+
+#######4 0829 revised patial change and most results is consistent with previous figure1E
+plot_scCODA_bubble2 <- function(df_raw,
+                                fc_cutoff = 0.5,
+                                tier_color_vec = NULL) {
+  library(tidyverse)
+  
+  group_raw_order <- c(
+    "KD",
+    "JIA",
+    "SLE",
+    "Uncategorized",
+    "Protein_homeostasis",
+    "TBK1_IRF3",
+    "Cytoskeleton_and_small_GTPase",
+    "Negative_regulation_of_IFN-I",
+    "Inborn_errors_of_cell_death",
+    "Immune_metabolic",
+    "Inflammasome_IL-1β",
+    "Arachidonic acid metabolism",
+    "Endolysosomal_nucleic_acid_sensing",
+    "Ca2+_flux-PLC",
+    "Osteoclast function",
+    "NFKB pathway"
+  )
+  group_levels <- rev(group_raw_order)
+  
+  default_tier_palette <- c(
+    "< -2" = "#283593",
+    "-2 ~ -1" = "#5C6BC0",
+    "-1 ~ 0" = "#BBDEFB",
+    "0 ~ 1" = "#FFCCBC",
+    "1 ~ 2" = "#E53935",
+    "> 2" = "#B71C1C"
+  )
+  
+  df_filter <- df_raw %>% filter(Significant == TRUE, abs(log2FC) >= fc_cutoff)
+  
+  if (nrow(df_filter) == 0) {
+    message(paste0("Warning: No cells pass filter (Significant=T & abs(log2FC) >= ", fc_cutoff, ")"))
+    return(ggplot() +
+             annotate("text", x = 0.5, y = 0.5, label = paste0("No cells meet abs(log2FC) ≥ ", fc_cutoff)) +
+             labs(x = "", y = "") +
+             theme_bw() +
+             theme(
+               panel.grid = element_line(color = "gray90", linewidth = 0.2),
+               axis.text = element_text(color = "black"),
+               axis.ticks = element_line(color = "black"),
+               legend.position = "none"
+             ))
+  }
+  
+  df_clean <- df_filter %>%
+    mutate(
+      CellShort = str_extract(`Cell Type`, "^[A-Za-z0-9]+"),
+      Level1 = case_when(
+        str_detect(CellShort, "^DC") ~ "DC",
+        str_detect(CellShort, "^Mono") ~ "Monocyte",
+        CellShort == "pDC" ~ "pDC",
+        CellShort == "LDG" ~ "LDG",
+        CellShort == "Basophil" ~ "Basophil",
+        str_detect(CellShort, "^B") ~ "B cell",
+        str_detect(CellShort, "^Plasma") ~ "Plasma",
+        str_detect(CellShort, "^Naive CD4") ~ "Naive CD4 T",
+        str_detect(CellShort, "^NnCD4T") ~ "Non-naive CD4 T",
+        str_detect(CellShort, "^Naive CD8") ~ "Naive CD8 T",
+        str_detect(CellShort, "^NnCD8T") ~ "Non-naive CD8 T",
+        str_detect(CellShort, "^UTC") ~ "UTC",
+        str_detect(CellShort, "^NK") ~ "NK"
+      ),
+      Level1 = factor(Level1, levels = c(
+        "DC",
+        "Monocyte",
+        "pDC",
+        "LDG",
+        "Basophil",
+        "B cell",
+        "Plasma",
+        "Naive CD4 T",
+        "Non-naive CD4 T",
+        "Naive CD8 T",
+        "Non-naive CD8 T",
+        "UTC",
+        "NK"
+      )),
+      IncTier = case_when(
+        `Inclusion probability` < 0.5 ~ "Low (<0.5)",
+        `Inclusion probability` >= 0.5 & `Inclusion probability` < 0.8 ~ "Medium (0.5~0.8)",
+        `Inclusion probability` >= 0.8 ~ "High (≥0.8)"
+      ),
+      FcTier = case_when(
+        log2FC < -2 ~ "< -2",
+        log2FC >= -2 & log2FC < -1 ~ "-2 ~ -1",
+        log2FC >= -1 & log2FC < 0 ~ "-1 ~ 0",
+        log2FC >= 0 & log2FC < 1 ~ "0 ~ 1",
+        log2FC >= 1 & log2FC < 2 ~ "1 ~ 2",
+        log2FC >= 2 ~ "> 2"
+      ),
+      Group = factor(Contrast, levels = group_levels)
+    ) %>%
+    filter(!is.na(Level1)) %>%
+    arrange(Level1, CellShort) %>%
+    mutate(CellShort = factor(CellShort, levels = unique(CellShort)))
+  
+  p <- ggplot(df_clean, aes(x = CellShort, y = Group)) +
+    geom_point(
+      aes(color = FcTier, size = IncTier),
+      alpha = 0.85,
+      stroke = 0
+    ) +
+    scale_color_manual(
+      values = if (!is.null(tier_color_vec)) setNames(tier_color_vec, names(default_tier_palette)) else default_tier_palette,
+      name = "log2FC Tier"
+    ) +
+    scale_size_manual(
+      values = c("Low (<0.5)" = 2, "Medium (0.5~0.8)" = 4, "High (≥0.8)" = 6),
+      name = "Inclusion Probability"
+    ) +
+    theme_bw() +
+    theme(
+      panel.grid = element_line(color = "gray90", linewidth = 0.2),
+      legend.key.height = unit(0.4, "cm"),
+      legend.key.width = unit(0.35, "cm"),
+      axis.text = element_text(size = 10, color = "black"),
+      axis.ticks = element_line(color = "black"),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      legend.title = element_text(size = 10),
+      legend.text = element_text(color = "black"),
+      plot.margin = margin(5, 5, 5, 5)
+    ) +
+    labs(x = "", y = "")
+  
+  return(p)
+}
+
+allsccoda <- read.csv("E:\\AID cohort\\code\\result\\0829scCODA_condition_out.csv")
+allsccoda <- allsccoda[allsccoda$Significant=="True",]
+condition_order <- c("KD", "JIA","SLE","Uncategorized","Protein_homeostasis",
+                     "TBK1_IRF3","Cytoskeleton_and_small_GTPase","Negative_regulation_of_IFN-I","Inborn_errors_of_cell_death",
+                     "Immune_metabolic","Inflammasome_IL-1β","Arachidonic acid metabolism",
+                     "Endolysosomal_nucleic_acid_sensing",
+                     "Ca2+_flux-PLC","Osteoclast function","NFKB pathway")
+allsccoda$Contrast <- factor(allsccoda$Contrast,levels=condition_order)
+allsccoda2<-allsccoda[allsccoda$Inclusion.probability>0.6,]
+p_05 <- plot_scCODA_bubble2(df_raw = allsccoda, fc_cutoff = 0.5)
+p_05 <- plot_scCODA_bubble2(df_raw = allsccoda2, fc_cutoff = 0.5)
+
 
 
 
