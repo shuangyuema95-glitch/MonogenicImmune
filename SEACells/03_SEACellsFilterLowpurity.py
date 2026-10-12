@@ -9,13 +9,13 @@ from tqdm import tqdm
 
 # Full gene-pathway mapping dictionary
 gene_list = {
-    "NFKB pathway": ["TNFAIP3", "IRAK2", "NOD2", "RELA"],
+    "NFKB pathway": ["TNFAIP3", "IRAK2", "NOD2", "RELA","TLR1","IL1R1"],
     "Uncategorized": ["ADA2", "ELF4", "CSF3R", "STAT4"],
     "Osteoclast function": ["ACP5", "OGFRL1"],
     "Ca2+_flux-PLC": ["PLCG2", "PLCG1"],
-    "Endolysosomal_nucleic_acid_sensing": ["UNC93B1", "TLR8", "TLR7", "TLR1", "PLD4", "TRAF3"],
+    "Endolysosomal_nucleic_acid_sensing": ["UNC93B1", "TLR8", "TLR7",  "PLD4", "TRAF3"],
     "Arachidonic acid metabolism": ["TBXAS1"],
-    "Inflammasome_IL-1β": ["IL1R1", "NLRC4", "NLRP3", "PSTPIP1", "CDC42", "LPIN2"],
+    "Inflammasome_IL-1β": ["NLRC4", "NLRP3", "PSTPIP1", "CDC42", "LPIN2"],
     "Immune_metabolic": ["LACC1", "SLC7A7"],
     "PP": ["polygenic"],
     "HC": ["wide-type"],
