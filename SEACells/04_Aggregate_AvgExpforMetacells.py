@@ -44,7 +44,7 @@ def aggregate_metacells(
     gene_list_name: str = "retainGenes.txt",
     out_h5ad_name: str = "seacell_metacell_logavg_filtered.h5ad",
     log_name: str = "check.txt",
-    expected_genes: int = 20991,
+    expected_genes: int = 21002,
 ):
     """
     Perform SEACell metacell aggregation with strict QC filtering and validation.
