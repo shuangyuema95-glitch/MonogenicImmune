@@ -13,7 +13,7 @@ gene_list = {
     "Uncategorized": ["ADA2", "ELF4", "CSF3R", "STAT4"],
     "Osteoclast function": ["ACP5", "OGFRL1"],
     "Ca2+_flux-PLC": ["PLCG2", "PLCG1"],
-    "Endolysosomal_nucleic_acid_sensing": ["UNC93B1", "TLR8", "TLR7",  "PLD4", "TRAF3"],
+    "Endolysosomal_nucleic_acid_sensing": ["UNC93B1", "TLR8", "TLR7", "PLD4", "TRAF3"],
     "Arachidonic acid metabolism": ["TBXAS1"],
     "Inflammasome_IL-1β": ["NLRC4", "NLRP3", "PSTPIP1", "CDC42", "LPIN2"],
     "Immune_metabolic": ["LACC1", "SLC7A7"],
@@ -303,7 +303,8 @@ def main():
     )
 
     # Export full metacell stats table
-    metacell_df.to_csv(out_meta_stats_csv, index=False)
+    #metacell_df.to_csv(out_meta_stats_csv, index=False)
+    metacell_df.reset_index().to_csv(out_meta_stats_csv, index=False)
     print(f"Metacell stats csv saved: {out_meta_stats_csv}")
 
     # Draw QC figures & export per-subplot CSV data
