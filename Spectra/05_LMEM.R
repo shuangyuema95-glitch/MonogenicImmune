@@ -30,7 +30,7 @@ ulm_res <- read.csv("lam0001_dict242_second_ulm_result.csv", stringsAsFactors = 
 meta <- as.data.frame(fread("E:\\AID cohort\\code\\metainfo.txt"))
 
 gene_list <- list(
-  "NFKB pathway" = c("TNFAIP3","IRAK2","NOD2","RELA","IL1R1","TLR1"),
+  "NFKB pathway" = c("TNFAIP3","IRAK2","NOD2","RELA","TLR1","IL1R1"),
   "Uncategorized" = c("ADA2","ELF4","CSF3R","STAT4"),
   "Osteoclast function" = c("ACP5","OGFRL1"),
   "Ca2+_flux-PLC" = c("PLCG2","PLCG1"),
@@ -145,7 +145,7 @@ lmem_res$fdr_global <- p.adjust(lmem_res$p_value, method = "fdr")
 lmem_res <- lmem_res %>% group_by(celltype) %>%
   mutate(fdr_celltype = p.adjust(p_value, method = "fdr")) %>% ungroup()
 lmem_res <- lmem_res %>% arrange(fdr_global)
-write.csv(lmem_res, "lam0001_dict242_lmem_results_norare.csv", row.names = FALSE)
+write.csv(lmem_res, "E:\\AID cohort\\code\\NMF\\Spectra\\LMEM建模结果备份\\1016_lam0001_dict242_lmem_results_norare.csv", row.names = FALSE)
 
 cat("Total pairs:", nrow(lmem_res), "\n")
 cat("Converged:", sum(lmem_res$converged), "\n")
@@ -154,8 +154,67 @@ cat("NA beta:", sum(is.na(lmem_res$beta)), "\n")
 lmem_res %>% filter(fdr_global < 0.05) %>% group_by(disease) %>%
   summarise(n_sig=n(), n_up=sum(beta>0), n_down=sum(beta<0)) %>% print()
 
-###### STEP6: heatmap function (two modes)
+
+##ulm_res celltype id dependent of my_dict(celltype)
+###### STEP6: merge annotations into lmem_res, output xlsx + txt
+# library(openxlsx)
+# anno_cols <- col_anno_cells[, c("factor_id", "name", "specificity", "immune_category")]
+# 
+# lmem_res_out <- lmem_res %>%
+#   left_join(anno_cols, by = c("factor" = "factor_id")) %>%
+#   arrange(fdr_global, p_value)
+# 
+# col_order_out <- c("factor", "name", "celltype", "specificity", "immune_category",
+#                    "disease", "n_hc", "n_dis", "beta", "se", "t_val",
+#                    "p_value", "fdr_global", "fdr_celltype", "converged", "note")
+# lmem_res_out <- lmem_res_out[, col_order_out]
+# 
+# cat("merged rows:", nrow(lmem_res_out), "\n")
+# cat("NA immune_category:", sum(is.na(lmem_res_out$immune_category)), "\n")
+# cat("significant (fdr<0.05):", sum(lmem_res_out$fdr_global < 0.05, na.rm = TRUE), "\n")
+# 
+# write.xlsx(lmem_res_out, "E:\\AID cohort\\code\\NMF\\Spectra\\LMEM建模结果备份\\1016lam0001_dict242_lmem_results_annotated.xlsx",
+#            row.names = FALSE, overwrite = TRUE)
+# write.table(lmem_res_out, "E:\\AID cohort\\code\\NMF\\Spectra\\LMEM建模结果备份\\1016lam0001_dict242_lmem_results_annotated.txt",
+#             sep = "\t", row.names = FALSE, quote = FALSE, col.names = TRUE)
+# cat("saved: xlsx + txt\n")# 这个版本运行逻辑顺序也有点问题 就是得先运行热图 生成col_ann_cols 才可以 热图又要读入这里的 文件
+###### STEP7: build annotation from lmem_res + ImmuneCate, output xlsx + txt
+library(openxlsx)
+
+ImmuneCate <- readRDS("E:\\AID cohort\\code\\NMF\\Spectra\\0830_PieImmuneCate.RDS")
+ct_order <- c("DC","Mono","pDC","LDG","Baso","B","Plasma",
+              "NnCD4T","NonNCD4T","NnCD8T","NonNCD8T","UTC","NK","Platelet","all")
+ct_prefix_regex <- paste0("^(", paste(rev(ct_order), collapse="|"), ")_")
+
+anno_df <- lmem_res %>%
+  distinct(factor, celltype) %>%
+  mutate(name = sub("^Factor_\\d+[ _]", "", factor),
+         specificity = ifelse(celltype == "all", "Non cell-type-specific", "cell-type-specific"),
+         immune_category = ImmuneCate$new_category_en[match(sub(ct_prefix_regex, "", name), ImmuneCate$name)])
+
+lmem_res_out <- lmem_res %>%
+  left_join(anno_df %>% select(factor, name, specificity, immune_category), by = "factor") %>%
+  arrange(fdr_global, p_value)
+
+col_order_out <- c("factor", "name", "celltype", "specificity", "immune_category",
+                   "disease", "n_hc", "n_dis", "beta", "se", "t_val",
+                   "p_value", "fdr_global", "fdr_celltype", "converged", "note")
+lmem_res_out <- lmem_res_out[, col_order_out]
+
+cat("merged rows:", nrow(lmem_res_out), "\n")
+cat("NA immune_category:", sum(is.na(lmem_res_out$immune_category)), "\n")
+cat("significant (fdr<0.05):", sum(lmem_res_out$fdr_global < 0.05, na.rm = TRUE), "\n")
+
+write.xlsx(lmem_res_out, "E:\\AID cohort\\code\\NMF\\Spectra\\LMEM建模结果备份\\1016lam0001_dict242_lmem_results_annotated.xlsx",
+           row.names = FALSE, overwrite = TRUE)
+write.table(lmem_res_out, "E:\\AID cohort\\code\\NMF\\Spectra\\LMEM建模结果备份\\1016lam0001_dict242_lmem_results_annotated.txt",
+            sep = "\t", row.names = FALSE, quote = FALSE, col.names = TRUE)
+
+###### STEP7: heatmap function (two modes)
 ###(1)continuous color value for beta values produced by LMEM model
+library(heatmap)
+library(tibble)
+library(dplyr)
 plot_lmem_heatmap <- function(lmem_res,
                               mode = c("cells", "immunecate", "pathway"),
                               factor_list = NULL,
@@ -309,7 +368,8 @@ plot_lmem_heatmap <- function(lmem_res,
 }
 
 
-sel_df<-read.xlsx("E:/AID cohort/code/NMF/Spectra/lam0001_dict242_lmem_results_annotated.xlsx")
+sel_df <- read.xlsx("E:\\AID cohort\\code\\NMF\\Spectra\\LMEM建模结果备份\\1016lam0001_dict242_lmem_results_annotated.xlsx")
+#sel_df<-read.xlsx("E:/AID cohort/code/NMF/Spectra/lam0001_dict242_lmem_results_annotated.xlsx")
 sel_df
 
 sel_vec <- sel_df[sel_df$celltype=="all", 1]
@@ -339,7 +399,6 @@ cell_groupbypathway<- plot_lmem_heatmap(lmem_res, mode = "pathway", factor_list 
 # dis_col1=c("#464D8A","#6673B5","#8F98C8","#B8B5D6","#FFEAE3","#F4AA87", "#D25748", "#B82530")
 # dis_col1=c("#464D8A","#6673B5","#8F98C8","#B8B5D6","#F7E9D9","#ECC79F","#DFA067","#BE812C")
 dis_col1=c("#2F4692","#335FAA","#4979BB","#8EADD4","#FFF1E9","#FCD9BB","#E89F60","#BE812C")
-
 plot_lmem_heatmap_binned <- function(lmem_res,
                                      mode = c("cells", "immunecate", "pathway"),
                                      factor_list = NULL,
@@ -353,20 +412,17 @@ plot_lmem_heatmap_binned <- function(lmem_res,
                                      immune_rds = "E:\\AID cohort\\code\\NMF\\Spectra\\0830_PieImmuneCate.RDS",
                                      na_text_size = 4,
                                      legend_height = 0.4,
+                                     border_color = NA,
                                      title = NULL) {
   mode <- match.arg(mode)
   if (is.null(title)) title <- sprintf("%s_groupby%s_binned (LMEM beta, disease vs HC)",
                                        ifelse(is.null(factor_list), "whole", "partial"), mode)
   library(pheatmap); library(dplyr); library(tidyr); library(stringr); library(gtable); library(grid)
-  
-  # matrices
   beta_mat <- lmem_res %>% select(disease, factor, beta) %>%
     pivot_wider(names_from = factor, values_from = beta) %>% column_to_rownames("disease") %>% as.matrix()
   sig_mat <- lmem_res %>% select(disease, factor, fdr_global) %>%
     mutate(sig = ifelse(fdr_global < 0.05, "*", "")) %>% select(-fdr_global) %>%
     pivot_wider(names_from = factor, values_from = sig) %>% column_to_rownames("disease") %>% as.matrix()
-  
-  # palettes
   ct_order <- c("DC","Mono","pDC","LDG","Baso","B","Plasma",
                 "NnCD4T","NonNCD4T","NnCD8T","NonNCD8T","UTC","NK","Platelet","all")
   celltype_colors <- c("DC"="#F0E442","Mono"="#F49D5C","pDC"="#B07A99","LDG"="#C95968",
@@ -383,8 +439,10 @@ plot_lmem_heatmap_binned <- function(lmem_res,
                       "Negative_regulation_of_IFN-I"="#76B7B2","Inborn_errors_of_cell_death"="#F28E2B","Immune_metabolic"="#EDC948",
                       "Inflammasome_IL-1β"="#8A9FD1","Arachidonic acid metabolism"="#61BADA","Endolysosomal_nucleic_acid_sensing"="#D37295",
                       "Ca2+_flux-PLC"="#A0CBE8","Osteoclast function"="#FABFD2","NFKB pathway"="#FFBE7D")
-  
-  # col_anno
+  pathway_imm_order <- c("Inflammatory regulation", "Cell function and homeostasis",
+                         "Innate immune sensing", "Adaptive immune regulation",
+                         "Amino acid metabolism", "Energy metabolism", "Lipid metabolism",
+                         "Small molecule & nucleotide metabolism", "Intracellular signal transduction")
   factor_ct_vec <- setNames(lmem_res$celltype, lmem_res$factor)
   all_factors <- colnames(beta_mat)
   col_anno <- data.frame(factor_id = all_factors, celltype = factor_ct_vec[all_factors],
@@ -394,16 +452,12 @@ plot_lmem_heatmap_binned <- function(lmem_res,
   ImmuneCate <- readRDS(immune_rds)
   ct_prefix_regex <- paste0("^(", paste(rev(ct_order), collapse="|"), ")_")
   col_anno$immune_category <- ImmuneCate$new_category_en[match(sub(ct_prefix_regex, "", col_anno$name), ImmuneCate$name)]
-  
-  # partial filter
   if (!is.null(factor_list)) {
     sel <- factor_list[factor_list != ""]
     matched <- col_anno$factor_id %in% sel | col_anno$name %in% sel
     cat(sprintf("[partial] %d / %d factors matched\n", sum(matched), length(sel)))
     col_anno <- col_anno[matched, ]; beta_mat <- beta_mat[, rownames(col_anno)]; sig_mat <- sig_mat[, rownames(col_anno)]
   }
-  
-  # sort + gaps by mode
   if (mode == "cells") {
     col_anno <- col_anno[order(factor(col_anno$celltype, levels = ct_order)), ]
     ct_counts <- table(factor(col_anno$celltype, levels = ct_order)); ct_counts <- ct_counts[ct_counts > 0]
@@ -413,23 +467,25 @@ plot_lmem_heatmap_binned <- function(lmem_res,
     imm_counts <- table(factor(col_anno$immune_category, levels = Immune_cateOrder)); imm_counts <- imm_counts[imm_counts > 0]
     gaps_col <- cumsum(imm_counts)[-length(imm_counts)]
   } else {
-    pw_order <- names(sort(table(col_anno$pure_pathway), decreasing = TRUE))
-    col_anno <- col_anno[order(factor(col_anno$pure_pathway, levels = pw_order), factor(col_anno$celltype, levels = ct_order)), ]
-    pw_counts <- table(factor(col_anno$pure_pathway, levels = pw_order)); pw_counts <- pw_counts[pw_counts > 0]
+    # pathway mode: sort by immune_category -> n_factors per pathway (desc) -> pure_pathway -> celltype
+    col_anno$n_cells <- as.integer(table(col_anno$pure_pathway)[col_anno$pure_pathway])
+    col_anno <- col_anno[order(
+      factor(col_anno$immune_category, levels = pathway_imm_order),
+      -col_anno$n_cells,
+      factor(col_anno$pure_pathway),
+      factor(col_anno$celltype, levels = ct_order)
+    ), ]
+    pw_counts <- table(factor(col_anno$pure_pathway, levels = unique(col_anno$pure_pathway)))
     gaps_col <- cumsum(pw_counts)[-length(pw_counts)]
   }
   beta_mat <- beta_mat[, rownames(col_anno)]; sig_mat <- sig_mat[, rownames(col_anno)]
   colnames(beta_mat) <- col_anno$name; colnames(sig_mat) <- col_anno$name; rownames(col_anno) <- col_anno$name
   col_anno_plot <- col_anno[, c("celltype", "specificity", "immune_category")]
-  
-  # column labels
   if (mode == "pathway") {
     labels_col <- rep("", nrow(col_anno))
   } else if (strip_celltype_prefix) {
     labels_col <- sub("^[^_]+_", "", colnames(beta_mat))
   } else { labels_col <- colnames(beta_mat) }
-  
-  # row order + annotation
   condition_order <- c("KD","JIA","SLE","Uncategorized","Protein_homeostasis","TBK1_IRF3",
                        "Cytoskeleton_and_small_GTPase","Negative_regulation_of_IFN-I","Inborn_errors_of_cell_death",
                        "Immune_metabolic","Inflammasome_IL-1β","Arachidonic acid metabolism","Endolysosomal_nucleic_acid_sensing",
@@ -437,18 +493,12 @@ plot_lmem_heatmap_binned <- function(lmem_res,
   beta_mat <- beta_mat[condition_order, ]; sig_mat <- sig_mat[condition_order, ]
   disease_group <- data.frame(group = c(rep("polygenic patient", 3), rep("monogenic patient", 13)),
                               disease = condition_order, row.names = condition_order)
-  
-  # annotation colors
   actual_ct <- unique(col_anno$celltype); actual_imm <- unique(col_anno$immune_category); actual_sp <- unique(col_anno$specificity)
   ann_colors <- list(group = group_colors, disease = disease_colors[condition_order],
                      celltype = celltype_colors[names(celltype_colors) %in% actual_ct],
                      specificity = sp_colors[names(sp_colors) %in% actual_sp],
                      immune_category = imm_colors[names(imm_colors) %in% actual_imm])
-  
-  # cell coloring: FULL 8 levels, unchanged
   bk_full <- beta_breaks; bk_full[bk_full == -Inf] <- -100; bk_full[bk_full == Inf] <- 100
-  
-  # legend: bins actually covered
   rng <- range(beta_mat, na.rm = TRUE)
   b1 <- findInterval(rng[1], beta_breaks)
   b2 <- findInterval(rng[2], beta_breaks)
@@ -457,7 +507,6 @@ plot_lmem_heatmap_binned <- function(lmem_res,
   leg_lab <- beta_labels[used]
   cat(sprintf("[legend] data [%.2f, %.2f] -> bins %d:%d, %d blocks: %s\n",
               rng[1], rng[2], b1, b2, length(used), paste(leg_lab, collapse=", ")))
-  
   n_col <- ncol(beta_mat); fontsize_col <- ifelse(n_col > 150, 5, ifelse(n_col > 100, 6, 7))
   p <- pheatmap(beta_mat,
                 color = beta_cols, breaks = bk_full,
@@ -468,12 +517,22 @@ plot_lmem_heatmap_binned <- function(lmem_res,
                 annotation_names_row = FALSE, show_rownames = FALSE,
                 labels_col = labels_col,
                 display_numbers = sig_mat, number_color = "black", fontsize_number = 7,
-                border_color = NA,
+                border_color = border_color,
                 main = title,
                 angle_col = 90, fontsize_row = 10, fontsize_col = fontsize_col,
                 legend = TRUE, cellwidth = cellwidth, cellheight = cellheight, silent = TRUE)
-  
-  # replace legend: compact height, top-aligned, no borders
+  lay <- p$gtable$layout
+  for(i in seq_len(nrow(lay))){
+    if(grepl("annotation", lay$name[i])){
+      g <- p$gtable$grobs[[i]]
+      if(inherits(g, "rect")){ g$gp$col <- NA; p$gtable$grobs[[i]] <- g }
+      if(!is.null(g$children)){
+        for(k in seq_along(g$children)){
+          if(inherits(g$children[[k]], "rect")) g$children[[k]]$gp$col <- NA
+        }
+      }
+    }
+  }
   leg_idx <- which(p$gtable$layout$name == "legend")
   if (length(leg_idx) > 0) {
     n <- length(leg_col)
@@ -488,8 +547,6 @@ plot_lmem_heatmap_binned <- function(lmem_res,
     p$gtable$grobs[[leg_idx]] <- gTree(children = gl)
     cat(sprintf("[legend] %d blocks, height=%.2f\n", n, lh))
   }
-  
-  # shrink annotation legend color blocks
   ann_leg_idx <- grep("annotation_legend", p$gtable$layout$name)
   if (length(ann_leg_idx) > 0) {
     for (cl in unique(p$gtable$layout$l[ann_leg_idx])) p$gtable$widths[cl] <- unit(0.85, "cm")
@@ -499,8 +556,6 @@ plot_lmem_heatmap_binned <- function(lmem_res,
       p$gtable$grobs[[i]] <- g
     }
   }
-  
-  # shrink NA text
   shrink_na <- function(g) {
     if (is.grob(g)) {
       if (inherits(g, "text") && !is.null(g$label) && ("NA" %in% g$label)) g$gp$fontsize <- na_text_size
@@ -509,8 +564,6 @@ plot_lmem_heatmap_binned <- function(lmem_res,
     return(g)
   }
   p$gtable$grobs <- lapply(p$gtable$grobs, shrink_na)
-  
-  # pathway mode: rotated text
   if (mode == "pathway") {
     pw_rle <- rle(as.character(col_anno$pure_pathway)); pw_ends <- cumsum(pw_rle$lengths)
     pw_starts <- c(1, pw_ends[-length(pw_ends)] + 1); pw_centers <- (pw_starts + pw_ends) / (2 * ncol(beta_mat))
@@ -520,46 +573,13 @@ plot_lmem_heatmap_binned <- function(lmem_res,
                     gp = gpar(fontsize = 8, fontface = "bold"), rot = 90)
     p$gtable <- gtable_add_grob(p$gtable, txt, t = anno_t, l = mat_pos$l, r = mat_pos$r, name = "pw_labels", clip = "off")
   }
-  
   grid.newpage(); grid.draw(p$gtable)
   return(col_anno)
 }
-
-
-
-sel_df  <- read.xlsx("E:/AID cohort/code/NMF/Spectra/lam0001_dict242_lmem_results_annotated.xlsx")
+sel_df <- read.xlsx("E:\\AID cohort\\code\\NMF\\Spectra\\LMEM建模结果备份\\1016lam0001_dict242_lmem_results_annotated.xlsx")
 sel_vec  <- sel_df[sel_df$celltype == "all", 1]
 sel_df <- read.xlsx("E:/AID cohort/code/NMF/Spectra/selected_leme2.xlsx")
 sel_vec2 <- sel_df[!sel_df$celltype == "all", 1]
-unique(sel_df$name)
-
-all_groupbyimmcate_binned <- plot_lmem_heatmap_binned(lmem_res, mode = "immunecate", factor_list = sel_vec,  strip_celltype_prefix = TRUE, cellheight = 10,cellwidth = 8.4)
-
-cell_groupbycells_binned   <- plot_lmem_heatmap_binned(lmem_res, mode = "cells",     factor_list = sel_vec2, strip_celltype_prefix = TRUE, cellheight = 10,cellwidth = 4.4)
-#cell_groupbyimmcate_binned <- plot_lmem_heatmap_binned(lmem_res, mode = "immunecate", factor_list = sel_vec2, strip_celltype_prefix = TRUE, cellheight = 12)
-cell_groupbypathway_binned <- plot_lmem_heatmap_binned(lmem_res, mode = "pathway",   factor_list = sel_vec2, cellheight = 10,cellwidth = 5.63)
-
-########################################################
-##ulm_res celltype id dependent of my_dict(celltype)
-###### STEP7: merge annotations into lmem_res, output xlsx + txt
-library(openxlsx)
-anno_cols <- col_anno_cells[, c("factor_id", "name", "specificity", "immune_category")]
-
-lmem_res_out <- lmem_res %>%
-  left_join(anno_cols, by = c("factor" = "factor_id")) %>%
-  arrange(fdr_global, p_value)
-
-col_order_out <- c("factor", "name", "celltype", "specificity", "immune_category",
-                   "disease", "n_hc", "n_dis", "beta", "se", "t_val",
-                   "p_value", "fdr_global", "fdr_celltype", "converged", "note")
-lmem_res_out <- lmem_res_out[, col_order_out]
-
-cat("merged rows:", nrow(lmem_res_out), "\n")
-cat("NA immune_category:", sum(is.na(lmem_res_out$immune_category)), "\n")
-cat("significant (fdr<0.05):", sum(lmem_res_out$fdr_global < 0.05, na.rm = TRUE), "\n")
-
-write.xlsx(lmem_res_out, "lam0001_dict242_lmem_results_annotated.xlsx",
-           row.names = FALSE, overwrite = TRUE)
-write.table(lmem_res_out, "lam0001_dict242_lmem_results_annotated.txt",
-            sep = "\t", row.names = FALSE, quote = FALSE, col.names = TRUE)
-cat("saved: xlsx + txt\n")
+all_groupbyimmcate_binned <- plot_lmem_heatmap_binned(lmem_res, mode = "immunecate", factor_list = sel_vec,  strip_celltype_prefix = TRUE, cellheight = 10, cellwidth = 8.4)
+cell_groupbycells_binned   <- plot_lmem_heatmap_binned(lmem_res, mode = "cells",     factor_list = sel_vec2, strip_celltype_prefix = TRUE, cellheight = 10, cellwidth = 4.4)
+cell_groupbypathway_binned <- plot_lmem_heatmap_binned(lmem_res, mode = "pathway",   factor_list = sel_vec2, cellheight = 10, cellwidth = 5.63)
