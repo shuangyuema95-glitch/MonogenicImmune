@@ -30,13 +30,13 @@ ulm_res <- read.csv("lam0001_dict242_second_ulm_result.csv", stringsAsFactors = 
 meta <- as.data.frame(fread("E:\\AID cohort\\code\\metainfo.txt"))
 
 gene_list <- list(
-  "NFKB pathway" = c("TNFAIP3","IRAK2","NOD2","RELA"),
+  "NFKB pathway" = c("TNFAIP3","IRAK2","NOD2","RELA","IL1R1","TLR1"),
   "Uncategorized" = c("ADA2","ELF4","CSF3R","STAT4"),
   "Osteoclast function" = c("ACP5","OGFRL1"),
   "Ca2+_flux-PLC" = c("PLCG2","PLCG1"),
-  "Endolysosomal_nucleic_acid_sensing" = c("UNC93B1","TLR8","TLR7","TLR1","PLD4","TRAF3"),
+  "Endolysosomal_nucleic_acid_sensing" = c("UNC93B1","TLR8","TLR7","PLD4","TRAF3"),
   "Arachidonic acid metabolism" = c("TBXAS1"),
-  "Inflammasome_IL-1β" = c("IL1R1","NLRC4","NLRP3","PSTPIP1","CDC42","LPIN2"),
+  "Inflammasome_IL-1β" = c("NLRC4","NLRP3","PSTPIP1","CDC42","LPIN2"),
   "Immune_metabolic" = c("LACC1","SLC7A7"),
   "Inborn_errors_of_cell_death" = c("RIPK1","TNFRSF1A","OTULIN","RNF31"),
   "Negative_regulation_of_IFN-I" = c("ISG15","USP18","SOCS1"),
