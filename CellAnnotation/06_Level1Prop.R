@@ -239,10 +239,25 @@ unique(CellNumber_sorted$type)
 CellNumber_sorted$Cells_scaled <- CellNumber_sorted$Cells_After / 1000
 
 
-plot_cell_pct <- function(perdata, cellnum) {
+#' Cell-number + Level1-proportion two-panel stacked plot
+#' @title plot_cell_pct
+#' @description Two-panel figure: one panel = per-sample Level1 proportion (%) stacked bar,
+#' the other = per-sample cell number bar colored by condition type. Sample order shared and
+#' driven by cellnum (sorted by type then cell number descending). Which panel sits on top is
+#' controlled by `top`; panel height ratio by `heights` (top/bottom). X-axis text always shown
+#' on the bottom panel only. Both legends on the right with identical key size, all text black.
+#' @param perdata Data.frame, per-sample Level1 proportions, columns: samples, Level1, pct (0-100)
+#' @param cellnum Data.frame, per-sample cell counts, columns: Sample, Cells_After, type
+#' @param heights Numeric vector length 2, top/bottom panel height ratio, default c(0.8, 1.12)
+#' @param top Character, "pct" (percentage on top) or "count" (cell number on top), default "pct"
+#' @return Combined patchwork ggplot
+#' @author MSY
+plot_cell_pct <- function(perdata, cellnum, heights = c(0.8, 1.12), top = "pct") {
   lv1_order <- c("Monocyte","LDG","DC","pDC","Basophil","Naive CD4 T","Non-naive CD4 T","Naive CD8 T","Non-naive CD8 T","B cell","Plasma","NK","UTC","Erythrocyte","Platelet")
   my_colors <- c("Monocyte"="#F49D5C","LDG"="#C95968","DC"="#F0E442","pDC"="#B07A99","Basophil"="#8C2522","Naive CD4 T"="#847AB3","Non-naive CD4 T"="#C8BBD5","Naive CD8 T"="#F6E1EE","Non-naive CD8 T"="#0B71AB","NK"="#96AF95","B cell"="#003D81","Plasma"="#B3D1E7","Erythrocyte"="#FFEFC1","Platelet"="#B3928B","UTC"="#86C7B4")
   type_cols <- c("Monogenic"="#C8BBD5","Healthy control"="gray80","Polygenic_SLE"="#4682B4","Polygenic_JIA"="#C6D199","Polygenic_KD"="#9CD2ED")
+  x_blank <- theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  x_show <- theme(axis.text.x = element_text(angle = 90, vjust = 0.35, hjust = 1, size = 6, colour = "black"))
   dat <- cellnum %>% group_by(type) %>% arrange(desc(Cells_After), .by_group = TRUE) %>% ungroup() %>%
     mutate(Sample = factor(Sample, levels = Sample), Cells_scaled = Cells_After / 1000)
   pd <- perdata %>% mutate(samples = factor(samples, levels = levels(dat$Sample)),
@@ -253,12 +268,13 @@ plot_cell_pct <- function(perdata, cellnum) {
     scale_y_continuous(breaks = seq(0, 100, 20), expand = c(0, 0)) +
     labs(x = "", y = "Percentage (%)") +
     theme_classic() +
-    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
-          axis.text.y = element_text(size = 8, colour = "black"),
-          axis.title = element_text(size = 10), axis.ticks = element_line(colour = "black"),
+    theme(axis.text.y = element_text(size = 8, colour = "black"),
+          axis.title = element_text(size = 10, colour = "black"),
+          axis.ticks = element_line(colour = "black"),
           legend.position = "right", legend.title = element_blank(),
-          legend.text = element_text(size = 8),
-          legend.key.height = unit(0.35, "cm"), legend.key.width = unit(0.35, "cm"))
+          legend.text = element_text(size = 8, colour = "black"),
+          legend.key.height = unit(0.35, "cm"), legend.key.width = unit(0.35, "cm")) +
+    (if (top == "pct") x_blank else x_show)
   p_count <- ggplot(dat, aes(x = Sample, y = Cells_scaled, fill = type)) +
     geom_bar(stat = "identity", width = 0.7) +
     scale_fill_manual(values = type_cols) +
@@ -266,17 +282,39 @@ plot_cell_pct <- function(perdata, cellnum) {
     scale_y_continuous(breaks = c(5, 10, 15, 20), expand = expansion(mult = c(0, 0.1))) +
     labs(x = "", y = expression("Cell number" ~ "*" ~ 10^3)) +
     theme_classic() +
-    theme(axis.text = element_text(colour = "black"),
+    theme(axis.text.y = element_text(size = 8, colour = "black"),
+          axis.title = element_text(size = 10, colour = "black"),
+          axis.ticks = element_line(colour = "black"),
           legend.position = "right", legend.title = element_blank(),
-          legend.text = element_text(size = 8),
-          legend.key.height = unit(0.35, "cm"), legend.key.width = unit(0.35, "cm"),
-          axis.text.x = element_text(angle = 90, vjust = 0.35, hjust = 1, size = 6),
-          axis.text.y = element_text(size = 8), axis.title = element_text(size = 10),
-          axis.ticks = element_line(colour = "black"))
-  p_pct / p_count + plot_layout(heights = c(1, 1))
+          legend.text = element_text(size = 8, colour = "black"),
+          legend.key.height = unit(0.35, "cm"), legend.key.width = unit(0.35, "cm")) +
+    (if (top == "pct") x_show else x_blank)
+  if (top == "pct") p_pct / p_count + plot_layout(heights = heights)
+  else p_count / p_pct + plot_layout(heights = heights)
 }
 
-plot_cell_pct(perdata, CellNumber_sorted)
+perdata <- read.xlsx("E://AID cohort//code//result//r4_Level1Perbysamples.xlsx")
+CellNumber <- read.xlsx("E://AID cohort//code//result//r4_Doublet_Filtering_Detailed_Stats.xlsx")
+metainfo <- as.data.frame(fread("E:\\AID cohort\\code\\metainfo.txt"))
+metainfo$status <- dplyr::recode(metainfo$status,
+                                 "monogenic patient" = "Monogenic", "polygenic patient" = "Polygenic",
+                                 "unaffected control" = "Healthy control")
+metainfo <- metainfo %>%
+  mutate(dataset_prefix = case_when(
+    str_detect(dataset, "^JIA_") ~ "JIA",
+    str_detect(dataset, "^SLE_") ~ "SLE",
+    str_detect(dataset, "^KD_") ~ "KD",
+    TRUE ~ ""),
+    status_final = ifelse(dataset_prefix != "", paste0(status, "_", dataset_prefix), status))
+CellNumber$type <- as.character(as.matrix(metainfo[match(CellNumber$Sample, metainfo$dataset), "status_final"]))
+CellNumber$type <- factor(CellNumber$type, levels = c("Healthy control", "Monogenic", "Polygenic_SLE", "Polygenic_KD", "Polygenic_JIA"))
+CellNumber_sorted <- CellNumber %>% group_by(type) %>%
+  arrange(desc(Cells_After), .by_group = TRUE) %>% ungroup() %>%
+  mutate(Sample = factor(Sample, levels = Sample))
+
+plot_cell_pct(perdata, CellNumber_sorted)                            # pct on top, 0.8/1.12
+plot_cell_pct(perdata, CellNumber_sorted, top = "count")             # count on top
+plot_cell_pct(perdata, CellNumber_sorted, top = "count", heights = c(1.2, 0.8))
 
 
 
@@ -342,6 +380,7 @@ plot_subtype_stacked <- function(
         gene_order <- c(gene_order, gene_list[[pw]])
       }
     }
+    # gene模式：先HC,KD,JIA,SLE，再接各个基因
     x_levels <- c(c("HC","KD","JIA","SLE"), gene_order)
     x_levels <- intersect(x_levels, unique(meta$group))
   }
