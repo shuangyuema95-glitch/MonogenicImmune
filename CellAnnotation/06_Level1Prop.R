@@ -82,6 +82,7 @@ plot_celltype_distribution <- function(seu,
                                        tier_colors = c("<1%"="#E8F0F8","1-5%"="#9EC9E0","5-10%"="#3D7DB8",">10%"="#0B3D7A"),
                                        bubble_ramp = col2,
                                        orientation = c("v","h")) {
+  library(tidyverse);library(patchwork)
   orientation <- match.arg(orientation)
   lab_map <- c("HC"="HC","KD"="KD","JIA"="JIA","SLE"="SLE",
                "Osteoclast function"="OST","Ca2+_flux-PLC"="CFP",
@@ -108,7 +109,8 @@ plot_celltype_distribution <- function(seu,
     mutate(band = case_when(n_found==0                 ~ "Rare",
                             n_found>=universal_min    ~ "Universal",
                             n_found<=specialized_max   ~ "Specialized",
-                            TRUE                      ~ "Shared"))
+                            n_high>=1                  ~ "Shared",
+                            TRUE                       ~ "Shared"))
   df <- df %>% left_join(band_df, by="cell")
   ord_df <- band_df %>%
     mutate(band=factor(band,levels=c("Universal","Shared","Specialized","Rare")),
@@ -176,19 +178,109 @@ plot_celltype_distribution <- function(seu,
 }
 
 res <- plot_celltype_distribution(pbmc1, group_col="condition", orientation="v",
-tier_colors = c("<1%"="#847AB3","1-5%"="#D1929B","5-10%"="#C6D199",">10%"="#0B71AB"))
-
+                                  tier_colors = c("<1%"="#847AB3","1-5%"="#D1929B","5-10%"="#C6D199",">10%"="#0B71AB"))
 print(res$plot)
 print(res$combined_table, n=Inf, width=Inf)
 
-print(res$plot)
-print(res$combined_table, n=Inf, width=Inf)
-View(res$combined_table)
 library(openxlsx)
 write.xlsx(res$combined_table,file="E:\\AID cohort\\code\\CellAnnotation\\Level1_bubble_pie.xlsx")
 
+######2 Level 1 percentage stratified by each sample, cell count after prepocessing for each sample
+#' Cell-number + Level1-proportion two-panel stacked plot
+#' @title plot_cell_pct
+#' @description Two-panel figure: top = per-sample Level1 proportion (%) stacked bar;
+#' bottom = per-sample cell number bar colored by condition type. Sample order shared
+#' and driven by cellnum (sorted by type then cell number descending). Both legends on
+#' the right with identical key size; top panel hides x-axis text.
+#' @param perdata Data.frame, per-sample Level1 proportions, columns: samples, Level1, pct (0-100)
+#' @param cellnum Data.frame, per-sample cell counts, columns: Sample, Cells_After, type
+#' @return Combined patchwork ggplot (percentage on top, cell number at bottom)
+#' @author MSY
 
-######1 Level 2 prop stack bar plot (denominator is total count for each level 2 cell)
+# perdata <- pbmc1@meta.data %>%
+#   count(samples, Level1) %>%
+#   group_by(samples) %>% mutate(pct = n / sum(n) * 100) %>% ungroup() %>%
+#   filter(!is.na(Level1))
+# # recheck
+# Y1<-as.data.frame.matrix(table(pbmc1$Level1,pbmc1$samples))
+# write.xlsx(perdata,file="E://AID cohort//code//result//r4_Level1Perbysamples.xlsx")
+
+perdata<-read.xlsx("E://AID cohort//code//result//r4_Level1Perbysamples.xlsx")
+CellNumber <- read.xlsx("E://AID cohort//code//result//r4_Doublet_Filtering_Detailed_Stats.xlsx")
+metainfo<-as.data.frame(fread("E:\\AID cohort\\code\\metainfo.txt"))
+
+metainfo$status<-dplyr::recode(metainfo$status,
+                               "monogenic patient" = "Monogenic","polygenic patient" = "Polygenic",
+                               "unaffected control" = "Healthy control")
+
+metainfo <- metainfo %>%
+  mutate(dataset_prefix = case_when(
+    str_detect(dataset, "^JIA_") ~ "JIA",
+    str_detect(dataset, "^SLE_") ~ "SLE",
+    str_detect(dataset, "^KD_") ~ "KD",
+    TRUE ~ ""),
+    status_final = ifelse(
+      dataset_prefix != "",
+      paste0(status,"_",dataset_prefix),
+      status))
+unique(metainfo$status_final)
+
+CellNumber$type<-as.character(as.matrix(metainfo[match(CellNumber$Sample,metainfo$dataset),'status_final']))
+unique(CellNumber$type)
+CellNumber$type<-factor(
+  CellNumber$type, levels = c("Healthy control",
+                              "Monogenic","Polygenic_SLE","Polygenic_KD","Polygenic_JIA"))
+
+CellNumber_sorted <- CellNumber %>%group_by(type) %>%
+  arrange(desc(Cells_After), .by_group = TRUE) %>%ungroup() %>%
+  mutate(Sample = factor(Sample, levels = Sample))
+
+unique(CellNumber_sorted$type)
+CellNumber_sorted$Cells_scaled <- CellNumber_sorted$Cells_After / 1000
+
+
+plot_cell_pct <- function(perdata, cellnum) {
+  lv1_order <- c("Monocyte","LDG","DC","pDC","Basophil","Naive CD4 T","Non-naive CD4 T","Naive CD8 T","Non-naive CD8 T","B cell","Plasma","NK","UTC","Erythrocyte","Platelet")
+  my_colors <- c("Monocyte"="#F49D5C","LDG"="#C95968","DC"="#F0E442","pDC"="#B07A99","Basophil"="#8C2522","Naive CD4 T"="#847AB3","Non-naive CD4 T"="#C8BBD5","Naive CD8 T"="#F6E1EE","Non-naive CD8 T"="#0B71AB","NK"="#96AF95","B cell"="#003D81","Plasma"="#B3D1E7","Erythrocyte"="#FFEFC1","Platelet"="#B3928B","UTC"="#86C7B4")
+  type_cols <- c("Monogenic"="#C8BBD5","Healthy control"="gray80","Polygenic_SLE"="#4682B4","Polygenic_JIA"="#C6D199","Polygenic_KD"="#9CD2ED")
+  dat <- cellnum %>% group_by(type) %>% arrange(desc(Cells_After), .by_group = TRUE) %>% ungroup() %>%
+    mutate(Sample = factor(Sample, levels = Sample), Cells_scaled = Cells_After / 1000)
+  pd <- perdata %>% mutate(samples = factor(samples, levels = levels(dat$Sample)),
+                           Level1 = factor(Level1, levels = lv1_order)) %>% filter(!is.na(Level1))
+  p_pct <- ggplot(pd, aes(x = samples, y = pct, fill = Level1)) +
+    geom_bar(stat = "identity", width = 0.7) +
+    scale_fill_manual(values = my_colors) +
+    scale_y_continuous(breaks = seq(0, 100, 20), expand = c(0, 0)) +
+    labs(x = "", y = "Percentage (%)") +
+    theme_classic() +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+          axis.text.y = element_text(size = 8, colour = "black"),
+          axis.title = element_text(size = 10), axis.ticks = element_line(colour = "black"),
+          legend.position = "right", legend.title = element_blank(),
+          legend.text = element_text(size = 8),
+          legend.key.height = unit(0.35, "cm"), legend.key.width = unit(0.35, "cm"))
+  p_count <- ggplot(dat, aes(x = Sample, y = Cells_scaled, fill = type)) +
+    geom_bar(stat = "identity", width = 0.7) +
+    scale_fill_manual(values = type_cols) +
+    geom_hline(linetype = "dashed", yintercept = 0.5) +
+    scale_y_continuous(breaks = c(5, 10, 15, 20), expand = expansion(mult = c(0, 0.1))) +
+    labs(x = "", y = expression("Cell number" ~ "*" ~ 10^3)) +
+    theme_classic() +
+    theme(axis.text = element_text(colour = "black"),
+          legend.position = "right", legend.title = element_blank(),
+          legend.text = element_text(size = 8),
+          legend.key.height = unit(0.35, "cm"), legend.key.width = unit(0.35, "cm"),
+          axis.text.x = element_text(angle = 90, vjust = 0.35, hjust = 1, size = 6),
+          axis.text.y = element_text(size = 8), axis.title = element_text(size = 10),
+          axis.ticks = element_line(colour = "black"))
+  p_pct / p_count + plot_layout(heights = c(1, 1))
+}
+
+plot_cell_pct(perdata, CellNumber_sorted)
+
+
+
+######3 Level 2 prop stack bar plot (denominator is total count for each level 2 cell) no using
 plot_subtype_stacked <- function(
     seu_obj,
     type = c("sample", "gene", "condition"),
@@ -250,7 +342,6 @@ plot_subtype_stacked <- function(
         gene_order <- c(gene_order, gene_list[[pw]])
       }
     }
-    # gene模式：先HC,KD,JIA,SLE，再接各个基因
     x_levels <- c(c("HC","KD","JIA","SLE"), gene_order)
     x_levels <- intersect(x_levels, unique(meta$group))
   }
